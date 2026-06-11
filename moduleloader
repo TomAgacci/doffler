@@ -1,0 +1,74 @@
+# hsn_loader.py
+
+import math
+from typing import Dict
+from doffler_engine import (
+    Expr, Const, sqrt, mul, div, pow_, add, sub
+)
+
+# -----------------------------
+# Tokenizer / Parser
+# -----------------------------
+
+def parse_expr(expr: str) -> Expr:
+    """
+    Minimal expression parser for the HSN DSL.
+    Supports: pi, e, sqrt(), + - * / ^, parentheses.
+    """
+
+    # Replace DSL tokens with Python equivalents
+    expr = expr.replace("^", "**")
+    expr = expr.replace("pi", "math.pi")
+    expr = expr.replace("e", "math.e")
+    expr = expr.replace("sqrt", "math.sqrt")
+
+    # Evaluate into a Python float
+    value = eval(expr, {"math": math})
+
+    # Wrap into Const expression
+    return Const(value)
+
+
+# -----------------------------
+# HSN File Loader
+# -----------------------------
+
+def load_hsn_file(path: str) -> Dict[str, str]:
+    """
+    Reads a .hsn file and returns a dict with:
+    { 'name': ..., 'desc': ..., 'expr': ... }
+    """
+    data = {"name": None, "desc": None, "expr": None}
+
+    with open(path, "r") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+
+            if "=" in line:
+                key, val = line.split("=", 1)
+                key = key.strip()
+                val = val.strip()
+                data[key] = val
+
+    if not data["name"] or not data["expr"]:
+        raise ValueError("HSN file missing required fields.")
+
+    return data
+
+
+def register_hsn_file(registry, path: str):
+    """
+    Loads a .hsn file and registers it into the HSNRegistry.
+    """
+    data = load_hsn_file(path)
+
+    def builder():
+        return parse_expr(data["expr"])
+
+    registry.register(
+        data["name"],
+        builder,
+        data.get("desc", "No description")
+    )
