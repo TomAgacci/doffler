@@ -1,0 +1,227 @@
+#!/usr/bin/env python3
+# doffler_engine.py
+#
+# A small symbolic/quantitative “Doffler Engine” core.
+# Focus: evaluating special expressions like y = (π√163)^(1/(π√163)) and comparing to e.
+
+from __future__ import annotations
+import math
+from dataclasses import dataclass
+from typing import Callable, Dict, Any, Optional
+
+
+# =========================
+# Core numeric primitives
+# =========================
+
+Number = float
+
+
+@dataclass
+class DofflerContext:
+    """Holds global numeric settings for the engine."""
+    rel_tol: float = 1e-15
+    abs_tol: float = 1e-15
+    max_iter: int = 10_000
+
+
+# =========================
+# Expression system
+# =========================
+
+class Expr:
+    """Base class for all expressions."""
+    def eval(self, ctx: DofflerContext) -> Number:
+        raise NotImplementedError
+
+
+@dataclass
+class Const(Expr):
+    value: Number
+
+    def eval(self, ctx: DofflerContext) -> Number:
+        return self.value
+
+
+@dataclass
+class Var(Expr):
+    name: str
+    env: Dict[str, Number]
+
+    def eval(self, ctx: DofflerContext) -> Number:
+        if self.name not in self.env:
+            raise KeyError(f"Variable '{self.name}' not found in environment.")
+        return self.env[self.name]
+
+
+@dataclass
+class UnaryOp(Expr):
+    op: Callable[[Number], Number]
+    arg: Expr
+
+    def eval(self, ctx: DofflerContext) -> Number:
+        return self.op(self.arg.eval(ctx))
+
+
+@dataclass
+class BinaryOp(Expr):
+    op: Callable[[Number, Number], Number]
+    left: Expr
+    right: Expr
+
+    def eval(self, ctx: DofflerContext) -> Number:
+        return self.op(self.left.eval(ctx), self.right.eval(ctx))
+
+
+# =========================
+# Convenience constructors
+# =========================
+
+def add(a: Expr, b: Expr) -> Expr:
+    return BinaryOp(lambda x, y: x + y, a, b)
+
+
+def sub(a: Expr, b: Expr) -> Expr:
+    return BinaryOp(lambda x, y: x - y, a, b)
+
+
+def mul(a: Expr, b: Expr) -> Expr:
+    return BinaryOp(lambda x, y: x * y, a, b)
+
+
+def div(a: Expr, b: Expr) -> Expr:
+    return BinaryOp(lambda x, y: x / y, a, b)
+
+
+def pow_(a: Expr, b: Expr) -> Expr:
+    return BinaryOp(lambda x, y: x ** y, a, b)
+
+
+def sqrt(a: Expr) -> Expr:
+    return UnaryOp(math.sqrt, a)
+
+
+def exp(a: Expr) -> Expr:
+    return UnaryOp(math.e.__rpow__, a)  # e^a
+
+
+# =========================
+# Doffler Engine
+# =========================
+
+@dataclass
+class DofflerResult:
+    value: Number
+    meta: Dict[str, Any]
+
+
+class DofflerEngine:
+    """
+    A small quantitative engine that:
+    - Evaluates expressions
+    - Compares them to special constants (like e)
+    - Reports near-equalities (Doffler “resonances”)
+    """
+
+    def __init__(self, ctx: Optional[DofflerContext] = None):
+        self.ctx = ctx or DofflerContext()
+
+    def eval_expr(self, expr: Expr) -> DofflerResult:
+        v = expr.eval(self.ctx)
+        return DofflerResult(value=v, meta={"type": "raw_eval"})
+
+    def compare_to_constant(
+        self,
+        value: Number,
+        constant: Number,
+        label: str = "const"
+    ) -> DofflerResult:
+        diff = value - constant
+        rel = abs(diff) / max(abs(constant), self.ctx.abs_tol)
+        is_close = math.isclose(value, constant,
+                                rel_tol=self.ctx.rel_tol,
+                                abs_tol=self.ctx.abs_tol)
+        return DofflerResult(
+            value=value,
+            meta={
+                "type": "comparison",
+                "target_label": label,
+                "target_value": constant,
+                "difference": diff,
+                "relative_error": rel,
+                "is_close": is_close,
+            },
+        )
+
+    def resonance_report(self, expr: Expr, constant: Number, label: str) -> Dict[str, Any]:
+        """Evaluate expr and compare to a constant, returning a compact report."""
+        res = self.eval_expr(expr)
+        cmp_res = self.compare_to_constant(res.value, constant, label=label)
+        return {
+            "expr_value": res.value,
+            "target_label": label,
+            "target_value": constant,
+            "difference": cmp_res.meta["difference"],
+            "relative_error": cmp_res.meta["relative_error"],
+            "is_close": cmp_res.meta["is_close"],
+        }
+
+
+# =========================
+# Ramanujan-style special case
+# =========================
+
+def ramanujan_163_expr() -> Expr:
+    """
+    Build the expression:
+        y = (π * sqrt(163))^(1 / (π * sqrt(163)))
+    in the engine's expression language.
+    """
+    pi_const = Const(math.pi)
+    c163 = Const(163.0)
+    pi_sqrt_163 = mul(pi_const, sqrt(c163))
+    exponent = div(Const(1.0), pi_sqrt_163)
+    return pow_(pi_sqrt_163, exponent)
+
+
+def build_y_equals_e_expr() -> Expr:
+    """Trivial expression y = e."""
+    return Const(math.e)
+
+
+# =========================
+# Demo / CLI
+# =========================
+
+def main() -> None:
+    ctx = DofflerContext(rel_tol=1e-15, abs_tol=1e-15)
+    engine = DofflerEngine(ctx)
+
+    # Expression: y = (π√163)^(1/(π√163))
+    expr_ramanujan = ramanujan_163_expr()
+    report_ramanujan = engine.resonance_report(expr_ramanujan, math.e, "e")
+
+    # Expression: y = e
+    expr_e = build_y_equals_e_expr()
+    report_e = engine.resonance_report(expr_e, math.e, "e")
+
+    print("=== Doffler Engine: Ramanujan 163 Resonance ===")
+    print(f"y = (π√163)^(1/(π√163))")
+    print(f" value          : {report_ramanujan['expr_value']!r}")
+    print(f" target (e)     : {report_ramanujan['target_value']!r}")
+    print(f" difference     : {report_ramanujan['difference']!r}")
+    print(f" relative_error : {report_ramanujan['relative_error']!r}")
+    print(f" is_close       : {report_ramanujan['is_close']!r}")
+    print()
+
+    print("=== Doffler Engine: y = e Check ===")
+    print(f"y = e")
+    print(f" value          : {report_e['expr_value']!r}")
+    print(f" target (e)     : {report_e['target_value']!r}")
+    print(f" difference     : {report_e['difference']!r}")
+    print(f" relative_error : {report_e['relative_error']!r}")
+    print(f" is_close       : {report_e['is_close']!r}")
+
+
+if __name__ == "__main__":
+    main()
