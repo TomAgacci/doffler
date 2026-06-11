@@ -1,0 +1,102 @@
+# doffler_engine_hsn.py
+#
+# Adds an HSN-style registry for exotic formula modules.
+
+from typing import Callable, Dict
+from dataclasses import dataclass
+import math
+
+# --- Base engine imports ---
+from doffler_engine import (
+    DofflerEngine,
+    DofflerContext,
+    Expr,
+    Const,
+    sqrt,
+    mul,
+    div,
+    pow_,
+)
+
+# =========================
+# HSN Registry System
+# =========================
+
+@dataclass
+class HSNModule:
+    """Defines a pluggable formula module."""
+    name: str
+    builder: Callable[[], Expr]
+    description: str
+
+
+class HSNRegistry:
+    """Registry for exotic formula modules."""
+    def __init__(self):
+        self.modules: Dict[str, HSNModule] = {}
+
+    def register(self, name: str, builder: Callable[[], Expr], description: str):
+        if name in self.modules:
+            raise ValueError(f"Module '{name}' already registered.")
+        self.modules[name] = HSNModule(name, builder, description)
+
+    def list_modules(self) -> Dict[str, str]:
+        return {name: mod.description for name, mod in self.modules.items()}
+
+    def build(self, name: str) -> Expr:
+        if name not in self.modules:
+            raise KeyError(f"No module named '{name}' found.")
+        return self.modules[name].builder()
+
+
+# =========================
+# Example exotic modules
+# =========================
+
+def hsn_ramanujan_163() -> Expr:
+    """Ramanujan resonance formula."""
+    pi_const = Const(math.pi)
+    c163 = Const(163.0)
+    pi_sqrt_163 = mul(pi_const, sqrt(c163))
+    exponent = div(Const(1.0), pi_sqrt_163)
+    return pow_(pi_sqrt_163, exponent)
+
+
+def hsn_phi_e_bridge() -> Expr:
+    """Golden ratio–Euler bridge."""
+    phi = Const((1 + math.sqrt(5)) / 2)
+    return pow_(phi, Const(1 / math.e))
+
+
+def hsn_quantum_pulse() -> Expr:
+    """Pulse-based exotic formula."""
+    return pow_(Const(math.pi), div(Const(1.0), sqrt(Const(7.0))))
+
+
+# =========================
+# Demo
+# =========================
+
+def main():
+    ctx = DofflerContext()
+    engine = DofflerEngine(ctx)
+    registry = HSNRegistry()
+
+    # Register modules
+    registry.register("ramanujan_163", hsn_ramanujan_163, "Ramanujan near-integer resonance")
+    registry.register("phi_e_bridge", hsn_phi_e_bridge, "Golden ratio–Euler bridge")
+    registry.register("quantum_pulse", hsn_quantum_pulse, "Pulse-based exotic formula")
+
+    print("=== HSN Registry Modules ===")
+    for name, desc in registry.list_modules().items():
+        print(f"{name}: {desc}")
+
+    print("\n=== Evaluate Ramanujan 163 ===")
+    expr = registry.build("ramanujan_163")
+    result = engine.eval_expr(expr)
+    print(f"Value: {result.value}")
+    print(f"Compare to e: {engine.compare_to_constant(result.value, math.e, 'e').meta}")
+
+
+if __name__ == "__main__":
+    main()
