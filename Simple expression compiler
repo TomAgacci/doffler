@@ -1,0 +1,95 @@
+# hsn_bytecode_compiler.py
+
+import math
+from typing import List, Tuple
+from hsn_bytecode import HSNBytecodeProgram, Instruction
+
+# Very small expression compiler using Python's eval as parser,
+# then walking the AST via a restricted environment.
+
+def compile_hsn_expr_to_bytecode(expr: str) -> HSNBytecodeProgram:
+    """
+    Compile an HSN DSL expression into bytecode.
+    DSL: pi, e, sqrt(), + - * / ^, parentheses.
+    """
+
+    # Normalize DSL to Python
+    expr_py = expr.replace("^", "**")
+    expr_py = expr_py.replace("pi", "math.pi")
+    expr_py = expr_py.replace("e", "math.e")
+    expr_py = expr_py.replace("sqrt", "math.sqrt")
+
+    # Parse to AST
+    import ast
+    tree = ast.parse(expr_py, mode="eval")
+
+    code: List[Instruction] = []
+
+    def emit(op: str, arg: float = 0.0):
+        code.append((op, arg))
+
+    def compile_node(node):
+        if isinstance(node, ast.Expression):
+            compile_node(node.body)
+
+        elif isinstance(node, ast.Constant):
+            emit("PUSH_CONST", float(node.value))
+
+        elif isinstance(node, ast.UnaryOp):
+            if isinstance(node.op, ast.USub):
+                compile_node(node.operand)
+                emit("PUSH_CONST", -1.0)
+                emit("MUL")
+            else:
+                raise ValueError("Unsupported unary op")
+
+        elif isinstance(node, ast.BinOp):
+            compile_node(node.left)
+            compile_node(node.right)
+
+            if isinstance(node.op, ast.Add):
+                emit("ADD")
+            elif isinstance(node.op, ast.Sub):
+                emit("SUB")
+            elif isinstance(node.op, ast.Mult):
+                emit("MUL")
+            elif isinstance(node.op, ast.Div):
+                emit("DIV")
+            elif isinstance(node.op, ast.Pow):
+                emit("POW")
+            else:
+                raise ValueError("Unsupported binary op")
+
+        elif isinstance(node, ast.Call):
+            # Only allow math.sqrt
+            if not isinstance(node.func, ast.Attribute):
+                raise ValueError("Unsupported function call")
+            if not (isinstance(node.func.value, ast.Name) and node.func.value.id == "math"):
+                raise ValueError("Unsupported function namespace")
+            if node.func.attr != "sqrt":
+                raise ValueError("Only math.sqrt is allowed")
+
+            if len(node.args) != 1:
+                raise ValueError("sqrt() takes exactly one argument")
+
+            compile_node(node.args[0])
+            emit("SQRT")
+
+        elif isinstance(node, ast.Attribute):
+            # math.pi, math.e
+            if isinstance(node.value, ast.Name) and node.value.id == "math":
+                if node.attr == "pi":
+                    emit("PUSH_CONST", math.pi)
+                elif node.attr == "e":
+                    emit("PUSH_CONST", math.e)
+                else:
+                    raise ValueError("Unsupported math attribute")
+            else:
+                raise ValueError("Unsupported attribute")
+
+        else:
+            raise ValueError(f"Unsupported AST node: {type(node).__name__}")
+
+    compile_node(tree)
+    emit("END")
+    return HSNBytecodeProgram(code)
