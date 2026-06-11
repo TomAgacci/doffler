@@ -1,0 +1,8 @@
+PUSH_CONST value
+ADD
+SUB
+MUL
+DIV
+POW
+SQRT
+END
