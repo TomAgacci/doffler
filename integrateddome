@@ -1,0 +1,31 @@
+# demo_hsn_loader.py
+
+from hsn_loader import register_hsn_file
+from hsn_visual_inspector import visual_registry_inspector
+from doffler_engine_hsn import HSNRegistry, DofflerEngine, DofflerContext
+
+import math
+
+def main():
+    registry = HSNRegistry()
+
+    # Load external modules
+    register_hsn_file(registry, "ramanujan_custom.hsn")
+    register_hsn_file(registry, "phi_bridge.hsn")
+
+    # Visual inspector
+    visual_registry_inspector(registry)
+
+    # Evaluate one
+    ctx = DofflerContext()
+    engine = DofflerEngine(ctx)
+
+    expr = registry.build("ramanujan_custom")
+    result = engine.eval_expr(expr)
+
+    print("Value:", result.value)
+    print("Compare to e:", engine.compare_to_constant(result.value, math.e, "e").meta)
+
+
+if __name__ == "__main__":
+    main()
