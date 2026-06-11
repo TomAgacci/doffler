@@ -1,0 +1,38 @@
+# hsn_live_reload.py
+
+import os
+import time
+from typing import Dict
+from hsn_loader import register_hsn_file
+
+class HSNLiveReloader:
+    def __init__(self, registry, directory: str, interval: float = 1.0):
+        self.registry = registry
+        self.directory = directory
+        self.interval = interval
+        self._mtimes: Dict[str, float] = {}
+
+    def _scan_files(self):
+        files = []
+        for name in os.listdir(self.directory):
+            if name.endswith(".hsn"):
+                files.append(os.path.join(self.directory, name))
+        return files
+
+    def _check_and_reload(self, path: str):
+        mtime = os.path.getmtime(path)
+        old_mtime = self._mtimes.get(path)
+
+        if old_mtime is None or mtime > old_mtime:
+            # New or modified file
+            print(f"[HSN LiveReload] Loading: {path}")
+            register_hsn_file(self.registry, path)
+            self._mtimes[path] = mtime
+
+    def run_forever(self):
+        print(f"[HSN LiveReload] Watching directory: {self.directory}")
+        while True:
+            files = self._scan_files()
+            for f in files:
+                self._check_and_reload(f)
+            time.sleep(self.interval)
