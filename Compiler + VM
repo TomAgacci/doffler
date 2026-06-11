@@ -1,0 +1,63 @@
+# hsn_bytecode.py
+
+import math
+from typing import List, Tuple
+from dataclasses import dataclass
+
+Instruction = Tuple[str, float]  # (opcode, operand) where operand may be unused
+
+# -----------------------------
+# Bytecode VM
+# -----------------------------
+
+@dataclass
+class HSNBytecodeProgram:
+    code: List[Instruction]
+
+
+class HSNBytecodeVM:
+    def __init__(self):
+        self.stack: List[float] = []
+
+    def run(self, program: HSNBytecodeProgram) -> float:
+        self.stack.clear()
+        ip = 0
+        code = program.code
+
+        while ip < len(code):
+            op, arg = code[ip]
+            ip += 1
+
+            if op == "PUSH_CONST":
+                self.stack.append(arg)
+            elif op == "ADD":
+                b = self.stack.pop()
+                a = self.stack.pop()
+                self.stack.append(a + b)
+            elif op == "SUB":
+                b = self.stack.pop()
+                a = self.stack.pop()
+                self.stack.append(a - b)
+            elif op == "MUL":
+                b = self.stack.pop()
+                a = self.stack.pop()
+                self.stack.append(a * b)
+            elif op == "DIV":
+                b = self.stack.pop()
+                a = self.stack.pop()
+                self.stack.append(a / b)
+            elif op == "POW":
+                b = self.stack.pop()
+                a = self.stack.pop()
+                self.stack.append(a ** b)
+            elif op == "SQRT":
+                a = self.stack.pop()
+                self.stack.append(math.sqrt(a))
+            elif op == "END":
+                break
+            else:
+                raise ValueError(f"Unknown opcode: {op}")
+
+        if not self.stack:
+            raise RuntimeError("Empty stack after execution.")
+        return self.stack[-1]
