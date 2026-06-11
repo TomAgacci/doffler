@@ -1,0 +1,60 @@
+# hsn_web_inspector.py
+
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import urlparse
+import threading
+
+class HSNWebInspectorHandler(BaseHTTPRequestHandler):
+    registry = None  # to be injected
+
+    def _html(self):
+        modules = self.registry.list_modules()
+        rows = []
+        for name, desc in modules.items():
+            rows.append(f"<tr><td>{name}</td><td>{desc}</td></tr>")
+        rows_html = "\n".join(rows)
+
+        return f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>HSN Registry Inspector</title>
+  <style>
+    body {{ font-family: sans-serif; background: #111; color: #eee; }}
+    table {{ border-collapse: collapse; width: 100%; }}
+    th, td {{ border: 1px solid #444; padding: 8px; }}
+    th {{ background: #222; }}
+    tr:nth-child(even) {{ background: #181818; }}
+    h1 {{ text-align: center; }}
+  </style>
+</head>
+<body>
+  <h1>HSN Registry Inspector</h1>
+  <table>
+    <tr><th>Module Name</th><th>Description</th></tr>
+    {rows_html}
+  </table>
+</body>
+</html>
+"""
+
+    def do_GET(self):
+        parsed = urlparse(self.path)
+        if parsed.path == "/":
+            html = self._html().encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(html)))
+            self.end_headers()
+            self.wfile.write(html)
+        else:
+            self.send_error(404, "Not Found")
+
+
+def start_hsn_web_inspector(registry, host="127.0.0.1", port=8080):
+    HSNWebInspectorHandler.registry = registry
+    server = HTTPServer((host, port), HSNWebInspectorHandler)
+    print(f"[HSN WebInspector] Serving on http://{host}:{port}")
+    t = threading.Thread(target=server.serve_forever, daemon=True)
+    t.start()
+    return server
