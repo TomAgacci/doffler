@@ -1,0 +1,24 @@
+# hsn_bytecode_integration.py
+
+from dataclasses import dataclass
+from typing import Callable
+from hsn_bytecode import HSNBytecodeVM
+from hsn_bytecode_compiler import compile_hsn_expr_to_bytecode
+from doffler_engine import Expr, Const
+
+@dataclass
+class BytecodeExpr(Expr):
+    program: object  # HSNBytecodeProgram
+    vm: HSNBytecodeVM
+
+    def eval(self, ctx) -> float:
+        return self.vm.run(self.program)
+
+def make_bytecode_builder_from_hsn(expr_str: str) -> Callable[[], Expr]:
+    program = compile_hsn_expr_to_bytecode(expr_str)
+    vm = HSNBytecodeVM()
+
+    def builder():
+        return BytecodeExpr(program=program, vm=vm)
+
+    return builder
